@@ -78,7 +78,7 @@ disc files ──► ps2_analyzer (+ Ghidra, hint lists) ──► recomp/ffop.t
   (PS2Recomp's GS native back end), rendered at 2x.
 - `runtime/ffop_overrides.cpp` holds the game-specific bindings, matched to the ELF by entry point and CRC.
 
-The runtime is the `PS2Recomp/` git submodule: [boubou666/PS2Recomp](https://github.com/boubou666/PS2Recomp), branch
+The runtime is the `PS2Recomp/` git submodule: [TheBozos/PS2Recomp](https://github.com/TheBozos/PS2Recomp), branch
 `native/renderer`, shared with the *Soulcalibur III*, *Twisted Metal:
 Black*, *Valkyrie Profile 2: Silmeria*, *The Lord of the Rings: The Third Age*, *Smash Court Tennis Pro Tournament 2*
 and *Drakengard* recompilations. The top-level `CMakeLists.txt` builds its runtime, swaps its placeholder function
@@ -141,7 +141,7 @@ logs to `build/runs/<name>.log` and screenshots the window.
 
 | Path | Contents |
 |---|---|
-| `PS2Recomp/` | The recompiler and runtime (git submodule, boubou666/PS2Recomp branch `main`) |
+| `PS2Recomp/` | The recompiler and runtime (git submodule, TheBozos/PS2Recomp branch `main`) |
 | `CMakeLists.txt` | Builds the runtime with the generated code and the game overrides linked in |
 | `recomp/` | Recompiler config (`ffop.toml`) and, as the port grows, the function map and entry-point hint lists |
 | `runtime/` | Game override module (`ffop_overrides.cpp`) |
@@ -156,5 +156,5 @@ Never commit or redistribute it.
 ## Credits
 
 - [PS2Recomp](https://github.com/ran-j/PS2Recomp) by ran-j and contributors (GPL), the recompiler and runtime this port is built on.
-- [boubou666/PS2Recomp](https://github.com/boubou666/PS2Recomp) and the recompilations developed on it; runtime fixes are shared both ways.
+- [TheBozos/PS2Recomp](https://github.com/TheBozos/PS2Recomp) and the recompilations developed on it; runtime fixes are shared both ways.
 - *Fighting for One Piece* © Eiichiro Oda / Shueisha, Toei Animation, Bandai. This is an unofficial fan project, not affiliated with or endorsed by them.
