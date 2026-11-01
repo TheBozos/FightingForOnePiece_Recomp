@@ -96,7 +96,7 @@ IOP modules into `ps2EntryRunner`. Generic fixes go to boubou666's `native/*` br
 ## Build and run
 
 ```bash
-git clone --recurse-submodules https://github.com/Arzaroth/FightingForOnePiece_Recomp.git
+git clone --recurse-submodules https://github.com/TheBozos/FightingForOnePiece_Recomp.git
 cd FightingForOnePiece_Recomp
 scripts/extract_iso.sh "/path/to/Fighting for One Piece (Japan).iso"   # disc files -> game/
 scripts/build_tools.sh                                                  # ps2_recomp, ps2_analyzer, ps2_vu_aot -> build/tools
