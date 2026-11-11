@@ -3,6 +3,7 @@
 //
 //   ffop-headless [--frames n] [--elf SLPS_255.45] [--symbols map] [--iso image] [--pad-script [n=]file]... [--card-dir dir]
 //                [--report n] [--print] [--quiet] [--no-sound]
+#include "ffop_audio.h"
 #include "ffop_functions.h"
 
 #include "bozo/app/determinism.h"
@@ -92,6 +93,7 @@ int main(int argc, char **argv)
     }
 
     bozo::host::FreeHost host(opt);
+    ffop::audio::attach(host.libraries());
     bozo::ee::Dispatcher d(host);
     d.setFunctions(ffop_function_table, ffop_function_count, ffop_resume_table, ffop_resume_count);
     std::string error;
