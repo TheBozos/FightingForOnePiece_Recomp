@@ -2,13 +2,26 @@
 #include "bozo/port.h"
 
 #include <cstdint>
+#include <cstring>
 
 namespace
 {
     constexpr uint32_t kFfopEntry = 0x0010001Cu;
 
-    void install(bozo::port::Registry &)
+    constexpr uint32_t kCdromModeSet = 0x001B5A80u;
+    constexpr int32_t kCdromModeGpOffset = -0x1C48;
+
+    void cdromModeSet(uint8_t *rdram, R5900Context *ctx, Runtime *)
     {
+        const uint32_t mode = getRegU32(ctx, 4);
+        const uint32_t at = getRegU32(ctx, 28) + static_cast<uint32_t>(kCdromModeGpOffset);
+        std::memcpy(rdram + (at & 0x01FFFFFCu), &mode, sizeof(mode));
+        ctx->pc = getRegU32(ctx, 31);
+    }
+
+    void install(bozo::port::Registry &runtime)
+    {
+        runtime.registerFunction(kCdromModeSet, &cdromModeSet);
     }
 }
 
