@@ -1,5 +1,4 @@
-#include "bozo/context.h"
-#include "bozo/port.h"
+#include "ffop_port.h"
 
 #include <cstdint>
 #include <cstring>
@@ -22,6 +21,7 @@ namespace
     void install(bozo::port::Registry &runtime)
     {
         runtime.registerFunction(kCdromModeSet, &cdromModeSet);
+        ffop::frame::install(runtime);
     }
 }
 
