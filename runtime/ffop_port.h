@@ -2,6 +2,10 @@
 
 #include "bozo/context.h"
 #include "bozo/port.h"
+#include "bozo/render/renderer.h"
+
+#include <memory>
+#include <vector>
 
 namespace ffop::frame
 {
@@ -19,6 +23,9 @@ namespace ffop::draw2d
 {
     // The frame's end: the 2D still pending is drawn, the frame published and the next one begun.
     void present();
+    // A batch drawn with the 2D at the next splice, after what is pending.
+    void queue(const bozo::render::Material &material, std::vector<bozo::render::Vertex> &&vertices,
+               std::shared_ptr<const bozo::render::Texture> texture);
     void install(bozo::port::Registry &runtime);
 }
 
