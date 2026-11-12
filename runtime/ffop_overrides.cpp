@@ -24,6 +24,7 @@ namespace
         ffop::frame::install(runtime);
         ffop::graphics::install(runtime);
         ffop::movies::install(runtime);
+        ffop::draw2d::install(runtime);
     }
 }
 

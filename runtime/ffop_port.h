@@ -8,6 +8,13 @@ namespace ffop::frame
     void install(bozo::port::Registry &runtime);
 }
 
+namespace ffop::draw2d
+{
+    // The frame's end: the 2D still pending is drawn, the frame published and the next one begun.
+    void present();
+    void install(bozo::port::Registry &runtime);
+}
+
 namespace ffop::movies
 {
     void install(bozo::port::Registry &runtime);
