@@ -20,5 +20,6 @@ namespace ffop::frame
     void install(bozo::port::Registry &runtime)
     {
         runtime.registerFunction(kFrameWait, &frameWait);
+        runtime.syncVCallbackAtVblank();
     }
 }
