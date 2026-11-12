@@ -2,11 +2,12 @@
 // BozoEngine's own timing, FFOP's overrides native.
 //
 //   ffop-headless [--frames n] [--elf SLPS_255.45] [--symbols map] [--iso image] [--pad-script [n=]file]... [--card-dir dir]
-//                [--report n] [--print] [--quiet] [--no-sound] [--profile]
+//                [--report n] [--print] [--quiet] [--no-sound] [--profile] [--wav file]
 #include "ffop_audio.h"
 #include "ffop_functions.h"
 
 #include "bozo/app/determinism.h"
+#include "bozo/audio/wav.h"
 #include "bozo/ee/dispatcher.h"
 #include "bozo/host/free_host.h"
 #include "bozo/port.h"
@@ -35,6 +36,7 @@ int main(int argc, char **argv)
     opt.symbolMap = FFOP_DEFAULT_SYMBOL_MAP;
     uint64_t report = 500;
     bool profile = false;
+    std::string wavPath;
     for (int k = 1; k < argc; ++k)
     {
         const std::string a = argv[k];
@@ -70,10 +72,12 @@ int main(int argc, char **argv)
             opt.sound = false;
         else if (a == "--profile")
             opt.profileIo = profile = true;
+        else if (a == "--wav")
+            wavPath = value();
         else
         {
             std::fprintf(stderr, "usage: ffop-headless [--frames n] [--elf path] [--symbols map] [--iso image] [--pad-script [n=]file]... "
-                                 "[--card-dir dir] [--report n] [--print] [--quiet] [--no-sound] [--profile]\n");
+                                 "[--card-dir dir] [--report n] [--print] [--quiet] [--no-sound] [--profile] [--wav file]\n");
             return 2;
         }
     }
@@ -133,7 +137,16 @@ int main(int argc, char **argv)
         if (report && (frame + 1) % report == 0 && !opt.quiet)
             state(frame + 1);
     };
+    bozo::audio::WavWriter wav;
+    if (!wavPath.empty())
+    {
+        if (!wav.open(wavPath))
+            std::fprintf(stderr, "ffop-headless: cannot write %s\n", wavPath.c_str());
+        else
+            host.onAudio = [&](uint64_t, const int16_t *samples, size_t count) { wav.write(samples, count); };
+    }
     const uint64_t frames = host.run();
+    wav.close();
     state(frames);
     const bozo::host::FreeStats &s = host.stats();
     std::printf("end: %s; %llu frames; %llu library calls, %llu kernel calls, %llu override calls, %llu VU0 programs, %llu "
