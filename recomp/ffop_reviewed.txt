@@ -15,3 +15,7 @@ scePadEnd 0x1c2df8
 sceMcEnd 0x1cf020
 sceMcChangeThreadPriority 0x1cf088
 sceCdInitEeCB 0x1d2da8
+# The S-command 0xF whose 8-byte result 0x116A98 reads as BCD seconds, minutes, hours, day, month and year (+2000), as
+# sceCdCLOCK lays them out. Unnamed, it binds the S-command server 0x80000593 through _sceCd_scmd_prechk, which nothing
+# answers, so VS Fight's stage load (st001_pub) spun on the bind forever.
+sceCdReadClock 0x1d4218

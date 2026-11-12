@@ -1,4 +1,4 @@
-# Symbol map of SLPS_255.45: bozo_symbolmap.py match, 556 functions.
+# Symbol map of SLPS_255.45: bozo_symbolmap.py match, 557 functions.
 # References: Champions of Norrath's SLUS_205.65 and NTGUI2.ELF (symbols kept), and Soul Calibur III's SLUS_212.16 with
 # the names of SC3's own map (an SDK 3.0 executable as FFOP's is). Regenerate with BozoEngine's tools/symbolmap:
 #   python3 -I tools/ffop_symbol_ref.py SLUS_212.16 sc3_symbols.txt sc3.rsp && llvm-objcopy @sc3.rsp SLUS_212.16 sc3.elf
@@ -164,6 +164,7 @@ sceCdInit 0x1d3a00
 sceCdDiskReady_old 0x1d3ce8
 sceCdDiskReady 0x1d3f00
 sceCdMmode 0x1d4120
+sceCdReadClock 0x1d4218
 sceCdStInit 0x1d42d8
 sceCdStStart 0x1d4308
 sceCdStSeekF 0x1d4340
