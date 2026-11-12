@@ -27,6 +27,8 @@ namespace ffop::draw3d
 
 namespace ffop::movies
 {
+    // The player's T0 accesses answered natively (true when `pc` is one).
+    bool instruction(R5900Context *ctx, Runtime *runtime, uint32_t pc);
     void install(bozo::port::Registry &runtime);
 }
 
