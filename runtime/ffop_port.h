@@ -27,6 +27,7 @@ namespace ffop::draw2d
     void queue(const bozo::render::Material &material, std::vector<bozo::render::Vertex> &&vertices,
                std::shared_ptr<const bozo::render::Texture> texture);
     void install(bozo::port::Registry &runtime);
+    void installText(bozo::port::Registry &runtime);
 }
 
 namespace ffop::draw3d
