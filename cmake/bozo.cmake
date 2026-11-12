@@ -78,7 +78,7 @@ foreach(i RANGE ${last})
 endforeach()
 add_custom_command(
     OUTPUT ${gen_files}
-    COMMAND bozo-recomp ${FFOP_ELF} ${gen_dir} --prefix ffop --files ${FFOP_GEN_FILES} --no-comments --externals ${externals}
+    COMMAND bozo-recomp ${FFOP_ELF} ${gen_dir} --prefix ffop --files ${FFOP_GEN_FILES} --no-comments --overrides-take-jumps --externals ${externals}
             --symbols ${FFOP_SYMBOL_MAP}
     DEPENDS bozo-recomp ${externals} ${FFOP_ELF} ${FFOP_SYMBOL_MAP}
     COMMENT "Recompiling FFOP")
