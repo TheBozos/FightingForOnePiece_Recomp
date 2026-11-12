@@ -2,7 +2,7 @@
 // BozoEngine's own timing, FFOP's overrides native.
 //
 //   ffop-headless [--frames n] [--elf SLPS_255.45] [--symbols map] [--iso image] [--pad-script [n=]file]... [--card-dir dir]
-//                [--report n] [--print] [--quiet] [--no-sound]
+//                [--report n] [--print] [--quiet] [--no-sound] [--profile]
 #include "ffop_audio.h"
 #include "ffop_functions.h"
 
@@ -12,12 +12,14 @@
 #include "bozo/port.h"
 #include "bozo/render/renderer.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <map>
 #include <string>
+#include <vector>
 
 #ifndef BOZO_RUN_DEFAULT_ELF
 #define BOZO_RUN_DEFAULT_ELF ""
@@ -32,6 +34,7 @@ int main(int argc, char **argv)
     opt.elf = BOZO_RUN_DEFAULT_ELF;
     opt.symbolMap = FFOP_DEFAULT_SYMBOL_MAP;
     uint64_t report = 500;
+    bool profile = false;
     for (int k = 1; k < argc; ++k)
     {
         const std::string a = argv[k];
@@ -65,10 +68,12 @@ int main(int argc, char **argv)
             opt.printGameOutput = true;
         else if (a == "--no-sound")
             opt.sound = false;
+        else if (a == "--profile")
+            opt.profileIo = profile = true;
         else
         {
             std::fprintf(stderr, "usage: ffop-headless [--frames n] [--elf path] [--symbols map] [--iso image] [--pad-script [n=]file]... "
-                                 "[--card-dir dir] [--report n] [--print] [--quiet] [--no-sound]\n");
+                                 "[--card-dir dir] [--report n] [--print] [--quiet] [--no-sound] [--profile]\n");
             return 2;
         }
     }
@@ -151,6 +156,18 @@ int main(int argc, char **argv)
         for (int sl = 0; sl < 4; ++sl)
             std::printf(" %d.%d: %llu;", p + 1, sl, static_cast<unsigned long long>(pads.socketReads[p][sl]));
     std::printf("\n");
+    if (profile)
+    {
+        std::vector<std::pair<uint64_t, std::string>> calls;
+        for (const auto &[name, n] : s.libraryByName)
+            calls.emplace_back(n, name);
+        std::sort(calls.rbegin(), calls.rend());
+        for (const auto &[n, name] : calls)
+            std::printf("library %s: %llu\n", name.c_str(), static_cast<unsigned long long>(n));
+        for (const auto &[site, rw] : s.ioSites)
+            std::printf("io %s 0x%08x: %llu reads, %llu writes\n", host.functionAt(site.first).c_str(), site.second,
+                        static_cast<unsigned long long>(rw[0]), static_cast<unsigned long long>(rw[1]));
+    }
     for (const auto &[name, n] : s.unanswered)
         std::printf("no native answer: %s (%llu)\n", name.c_str(), static_cast<unsigned long long>(n));
     return host.endReason().rfind("FAULT", 0) == 0 ? 1 : 0;
