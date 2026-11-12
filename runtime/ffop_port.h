@@ -8,6 +8,11 @@ namespace ffop::frame
     void install(bozo::port::Registry &runtime);
 }
 
+namespace ffop::movies
+{
+    void install(bozo::port::Registry &runtime);
+}
+
 namespace ffop::graphics
 {
     struct DispEnv

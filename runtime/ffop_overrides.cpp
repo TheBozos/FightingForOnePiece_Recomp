@@ -23,6 +23,7 @@ namespace
         runtime.registerFunction(kCdromModeSet, &cdromModeSet);
         ffop::frame::install(runtime);
         ffop::graphics::install(runtime);
+        ffop::movies::install(runtime);
     }
 }
 
