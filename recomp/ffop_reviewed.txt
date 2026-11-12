@@ -2,3 +2,16 @@
 # Between scePadSetButtonInfo and scePadEnterPressMode, as in libpad; reads the pad's DMA status through
 # scePadGetDmaStr and answers 1 when the pad reports its pressure mode.
 scePadInfoPressMode 0x1c3da0
+# The PS2Recomp port's ps2_analyzer map (git: recomp/ffop.toml before the move to BozoEngine) bound these by signature;
+# each starts a function there and is called where the SDK's name is expected.
+# The movie player at 0x1B7F34 calls sceMpegReset then this with the same mp; it answers 1 and does nothing else.
+sceMpegDelete 0x1c4fc0
+sceMpegGetPicture 0x1c5008
+sceMpegDemuxPssRing 0x1c9200
+# sceMpegDemuxPss (0x1C95E0) is a wrapper that calls it with its last argument 0.
+sceMpegAddStrCallback 0x1c9600
+scePadInit2 0x1c2d00
+scePadEnd 0x1c2df8
+sceMcEnd 0x1cf020
+sceMcChangeThreadPriority 0x1cf088
+sceCdInitEeCB 0x1d2da8

@@ -1,4 +1,4 @@
-# Symbol map of SLPS_255.45: bozo_symbolmap.py match, 547 functions.
+# Symbol map of SLPS_255.45: bozo_symbolmap.py match, 556 functions.
 # References: Champions of Norrath's SLUS_205.65 and NTGUI2.ELF (symbols kept), and Soul Calibur III's SLUS_212.16 with
 # the names of SC3's own map (an SDK 3.0 executable as FFOP's is). Regenerate with BozoEngine's tools/symbolmap:
 #   python3 -I tools/ffop_symbol_ref.py SLUS_212.16 sc3_symbols.txt sc3.rsp && llvm-objcopy @sc3.rsp SLUS_212.16 sc3.elf
@@ -58,6 +58,8 @@ sceSdRemoteCallbackQuit 0x1c0c80
 _sdrCBThread 0x1c0db8
 _sdrCB 0x1c0e28
 scePadInit 0x1c2b68
+scePadInit2 0x1c2d00
+scePadEnd 0x1c2df8
 _send_to_iop 0x1c2ea8
 scePadPortOpen 0x1c2fc0
 scePadPortClose 0x1c31a8
@@ -87,7 +89,9 @@ scePadSetWarningLevel 0x1c40d8
 sceMpegCreate 0x1c4368
 _sendDataToIPU 0x1c45a0
 sceMpegInit 0x1c4f10
+sceMpegDelete 0x1c4fc0
 sceMpegAddBs 0x1c4fc8
+sceMpegGetPicture 0x1c5008
 sceMpegReset 0x1c50a8
 sceMpegIsEnd 0x1c5128
 sceMpegIsRefBuffEmpty 0x1c5138
@@ -105,6 +109,8 @@ _defRestartDMA 0x1c5640
 _ch3dmaCSC 0x1c67c0
 _ch4dma 0x1c6908
 _id2type 0x1c69e0
+sceMpegDemuxPssRing 0x1c9200
+sceMpegAddStrCallback 0x1c9600
 _ErrMessage 0x1c97d8
 _Error 0x1c9950
 _motionVectors 0x1cb510
@@ -113,6 +119,8 @@ sceIpuRestartDMA 0x1ce990
 sceIpuSync 0x1ceae0
 sceIpuInit 0x1cebc0
 sceMcInit 0x1cedf8
+sceMcEnd 0x1cf020
+sceMcChangeThreadPriority 0x1cf088
 sceMcGetSlotMax 0x1cf148
 sceMcOpen 0x1cf208
 sceMcMkdir 0x1cf330
@@ -137,6 +145,7 @@ sceMcGetEntSpace 0x1d0520
 sceCdCallback 0x1d2bd0
 _sceCd_cd_callback 0x1d2c38
 _Cdvd_cbLoop 0x1d2cd8
+sceCdInitEeCB 0x1d2da8
 _sceCd_cd_read_intr 0x1d2e48
 cmd_sem_init 0x1d2f00
 cdvd_exit 0x1d2fe8
