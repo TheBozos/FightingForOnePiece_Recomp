@@ -33,8 +33,10 @@ Not an emulator: the game's own MIPS R5900 code, rebuilt as a native program, wi
 The game boots, plays the logo and opening movies, and draws the title, the menus, character select, the VS screen and
 the fights (stage, fighters with their ink outlines, hit effects, HUD) natively, with music, sound effects and voices.
 Fighting Mode, VS Fight (against the CPU or a second pad), Training and Option run on the eight stages, with the pause
-menu, the Continue screen, the results and the memory card's saves and loads. The headless runs are checked by
-rendering their draw lists in software. The window build has not been run yet.
+menu, the Continue screen, the results and the memory card's saves and loads. Gamble (the bet, five fights, the payout
+and the ending), Recording (a fight against the CPU or a second pad, saved to the card) and Replay (that fight loaded
+and played back) run too. The headless runs are checked by rendering their draw lists in software. The window build
+has not been run yet.
 
 | Milestone | |
 |---|:---:|
@@ -47,13 +49,17 @@ rendering their draw lists in software. The window build has not been run yet.
 | Music, sound effects, voices | ✅ |
 | Text library: the memory card messages | ✅ |
 | Modes: Fighting, VS Fight, Training, Option; pause menu, Continue, results, memory card | ✅ |
-| Gamble, Recording, Replay (they need the money a cleared Fighting Mode earns) | ⏳ |
+| Modes: Gamble, Recording, Replay; the ending | ✅ |
 | The game in a window (`-DFFOP_WINDOW=ON`) | 🔧 |
 
-✅ works · 🔧 in progress · ⏳ not reached yet
+✅ works · 🔧 in progress
 
 The frame-buffer effects the code holds (the afterimage at 0x19AC78, the radial blur at 0x19AF00, the fades at 0x19B610,
 0x19BC40 and 0x19C190) have no caller in the ELF and run in none of the modes; nothing reads the frame buffer back.
+
+A recording keeps the pads, not the random generator, which the game never seeds: Recording's character select draws one
+number that Replay's path does not, so a replay against the CPU can part from the recorded fight. A fight between two
+pads replays hit for hit.
 
 ## How it works
 
@@ -76,8 +82,8 @@ disc IRX ──► BozoEngine tools/native_irx ───────────
   - the DMA driver, readbacks, display registers and timers (the movie player's T0 pacing, the frame meter's T3)
     answered natively;
   - the movies on the renderer's backdrop;
-  - the 2D sprite system (textures decoded from EE memory through one GS page's addressing), and the text library's
-    glyphs (the memory card messages);
+  - the 2D sprite system (textures decoded from EE memory through one GS page's addressing, TEST's alpha test with
+    its fail mode), and the text library's glyphs (the memory card messages);
   - the VU0 microprograms in C++;
   - the 3D draw lists, rigid and skinned meshes with the VU1 programs' arithmetic written by hand, textures from the
     bank uploads;

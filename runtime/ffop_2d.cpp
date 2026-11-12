@@ -223,8 +223,14 @@ namespace ffop::draw2d
             Material material;
             std::vector<Vertex> vertices;
             TexturePtr texture;
+            uint8_t alphaFail = 0;
         };
         std::vector<Pending> g_pending;
+
+        constexpr Material::AlphaFunc kFailing[8] = {
+            Material::AlphaFunc::Always,   Material::AlphaFunc::Never, Material::AlphaFunc::GreaterEqual, Material::AlphaFunc::Greater,
+            Material::AlphaFunc::NotEqual, Material::AlphaFunc::Less,  Material::AlphaFunc::LessEqual,    Material::AlphaFunc::Equal,
+        };
         bool g_started = false;
 
         bozo::render::Screen screen()
@@ -261,6 +267,9 @@ namespace ffop::draw2d
             m.depthWrite = zte && ztst != 0u;
             if (zte && ztst == 1u)
                 m.depthTest = false;
+            m.alphaTest = test & 1u;
+            m.alphaFunc = static_cast<Material::AlphaFunc>((test >> 1) & 7u);
+            m.alphaRef = static_cast<uint8_t>(test >> 4);
             m.nearest = withTex1 ? ((g.u64(params + 0x48) >> 5) & 1u) == 0u : false;
             m.clampU = m.clampV = true;
             const uint8_t fog = g.at(params + 0x37)[0];
@@ -271,6 +280,13 @@ namespace ffop::draw2d
                 m.fogColour = c[0] | (uint32_t(c[1]) << 8) | (uint32_t(c[2]) << 16);
             }
             return m;
+        }
+
+        Pending pending(const Guest &g, uint32_t params, bool textured, bool withTex1, TexturePtr texture)
+        {
+            Pending p{material(g, params, textured, withTex1), {}, std::move(texture)};
+            p.alphaFail = static_cast<uint8_t>((g.u64(params + 0x40) >> 12) & 3u);
+            return p;
         }
 
         float fogOf(const Guest &g, uint32_t params)
@@ -313,12 +329,26 @@ namespace ffop::draw2d
         void flush()
         {
             bozo::render::Renderer &renderer = bozo::render::Renderer::instance();
+            auto draw = [&](const Pending &p, const Material &m) {
+                if (p.texture)
+                    renderer.draw(m, kIdentity, p.vertices.data(), static_cast<uint32_t>(p.vertices.size()), p.texture);
+                else
+                    renderer.draw(m, kIdentity, p.vertices.data(), static_cast<uint32_t>(p.vertices.size()));
+            };
             for (const Pending &p : g_pending)
             {
-                if (p.texture)
-                    renderer.draw(p.material, kIdentity, p.vertices.data(), static_cast<uint32_t>(p.vertices.size()), p.texture);
+                draw(p, p.material);
+                if (!p.material.alphaTest || p.alphaFail == 0u)
+                    continue;
+                Material failed = p.material;
+                failed.alphaFunc = kFailing[static_cast<int>(p.material.alphaFunc)];
+                if (p.alphaFail == 2u)
+                    failed.colourMask = 0;
                 else
-                    renderer.draw(p.material, kIdentity, p.vertices.data(), static_cast<uint32_t>(p.vertices.size()));
+                    failed.depthWrite = false;
+                if (p.alphaFail == 3u)
+                    failed.colourMask &= 0x7u;
+                draw(p, failed);
             }
             g_pending.clear();
         }
@@ -344,7 +374,7 @@ namespace ffop::draw2d
             const float xa = x0 / 16.0f, xb = (x0 + w16) / 16.0f, ya = y0 / 16.0f, yb = (y0 + h16) / 16.0f;
             const uint32_t rgba = g.u32(params + 0x30);
             const float fog = fogOf(g, params), zf = static_cast<float>(z);
-            Pending p{material(g, params, true, true), {}, tex};
+            Pending p = pending(g, params, true, true, tex);
             quad(p, vertex(xa, ya, zf, 0, 0, rgba, fog), vertex(xb, ya, zf, 1, 0, rgba, fog), vertex(xa, yb, zf, 0, 1, rgba, fog),
                  vertex(xb, yb, zf, 1, 1, rgba, fog));
             queue(std::move(p));
@@ -377,7 +407,7 @@ namespace ffop::draw2d
                 return vertex((bx + c * sx * du + s * sy * dv) / 16.0f, (by - s * sx * du + c * sy * dv) / 16.0f, zf, u, v, rgba, fog);
             };
             const float w = static_cast<float>(im.width), h = static_cast<float>(im.height);
-            Pending p{material(g, params, true, true), {}, tex};
+            Pending p = pending(g, params, true, true, tex);
             quad(p, corner(0, 0, 0, 0), corner(w, 0, 1, 0), corner(0, h, 0, 1), corner(w, h, 1, 1));
             queue(std::move(p));
         }
@@ -395,7 +425,7 @@ namespace ffop::draw2d
             const float x1 = (g.s32(params + 0x14) + kCentre - 8) / 16.0f, y1 = (g.s32(params + 0x18) + kCentre - 4) / 16.0f;
             const uint32_t rgba = untexturedColour(g.u32(params + 0x30));
             const float fog = fogOf(g, params), zf = static_cast<float>(z);
-            Pending p{material(g, params, false, false), {}, nullptr};
+            Pending p = pending(g, params, false, false, nullptr);
             quad(p, vertex(x0, y0, zf, 0, 0, rgba, fog), vertex(x1, y0, zf, 0, 0, rgba, fog), vertex(x0, y1, zf, 0, 0, rgba, fog),
                  vertex(x1, y1, zf, 0, 0, rgba, fog));
             queue(std::move(p));
@@ -438,7 +468,7 @@ namespace ffop::draw2d
                 TexturePtr tex = texture(g, im, true);
                 if (!tex)
                     return;
-                b.pending = Pending{material(g, vertices[0], true, true), {}, tex};
+                b.pending = pending(g, vertices[0], true, true, tex);
                 b.pending.material.useQ = true;
                 b.open = true;
             }
@@ -488,7 +518,7 @@ namespace ffop::draw2d
                 TexturePtr tex = texture(g, im);
                 if (!tex)
                     return;
-                b.pending = Pending{material(g, params, true, true), {}, tex};
+                b.pending = pending(g, params, true, true, tex);
                 b.pending.material.fog = false;
                 b.open = true;
             }
