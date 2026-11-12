@@ -385,5 +385,6 @@ namespace ffop::draw3d
         runtime.registerFunction(kLink, &link);
         installTextures(runtime);
         installRigid(runtime);
+        installSkinned(runtime);
     }
 }

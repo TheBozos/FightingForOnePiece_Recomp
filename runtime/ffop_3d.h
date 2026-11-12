@@ -171,4 +171,5 @@ namespace ffop::draw3d
 
     void installTextures(bozo::port::Registry &runtime);
     void installRigid(bozo::port::Registry &runtime);
+    void installSkinned(bozo::port::Registry &runtime);
 }
