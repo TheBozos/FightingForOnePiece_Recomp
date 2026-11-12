@@ -20,6 +20,11 @@ namespace ffop::draw2d
     void install(bozo::port::Registry &runtime);
 }
 
+namespace ffop::draw3d
+{
+    void install(bozo::port::Registry &runtime);
+}
+
 namespace ffop::movies
 {
     void install(bozo::port::Registry &runtime);
