@@ -1,0 +1,4 @@
+# Names confirmed by reading SLPS_255.45's code, for bozo_symbolmap.py match --reviewed.
+# Between scePadSetButtonInfo and scePadEnterPressMode, as in libpad; reads the pad's DMA status through
+# scePadGetDmaStr and answers 1 when the pad reports its pressure mode.
+scePadInfoPressMode 0x1c3da0
