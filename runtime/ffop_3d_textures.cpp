@@ -1,0 +1,312 @@
+// FFOP's 3D textures natively: the texels and CLUTs the bank loader's 0x1A66D0 uploads through 0x197050(packet, DBP,
+// DBW, PSM, x, y, width, height, data) kept per bank by their DBP as they are sent (the game frees the file after), and
+// a mesh's TEX0 (patched in at the model's load from the record 0x1A66D0 fills) decoded from the uploads at its TBP and
+// CBP in the bank resident at the draw. A fighter's alternate textures (a pained face) are the .tex files 0x1A7DA8 /
+// 0x1A7EA0 prepare over a bank texture's TBP / CBP: 0x1A8048 lays one over the resident bank until 0x1A7350 next sends
+// that bank's pages again.
+#include "ffop_port.h"
+
+#include "ffop_3d.h"
+#include "ffop_functions.h"
+
+#include "bozo/hash.h"
+#include "bozo/render/texture_pack.h"
+
+#include <algorithm>
+#include <iterator>
+#include <unordered_map>
+
+namespace ffop::draw3d
+{
+    namespace
+    {
+        namespace packs = bozo::render::packs;
+
+        constexpr uint32_t kLoadImage = 0x00197050u;
+        constexpr uint32_t kPrepareSwap = 0x001A7DA8u;
+        constexpr uint32_t kSwapPacket = 0x001A7EA0u;
+        constexpr uint32_t kSwap = 0x001A8048u;
+        constexpr uint32_t kMakeResident = 0x001A7350u;
+        constexpr int32_t kResidentBankGp = -0x16FC;
+        constexpr uint32_t kSlots = 4;
+        constexpr uint32_t kFromPlacement[] = {0x001A67ECu, 0x001A6920u, 0x001A6B50u};
+        constexpr int32_t kLoadingBankGp = -0x263C;
+        constexpr uint64_t kTexa = 0x80u;
+        constexpr int32_t kBanks = 8;
+
+        struct Upload
+        {
+            uint32_t psm = 0, width = 0, height = 0;
+            std::vector<uint8_t> bytes;
+            uint64_t serial = 0;
+        };
+        uint64_t g_serial = 0;
+
+        struct Decoded
+        {
+            uint64_t texels = 0, clut = 0;
+            TexturePtr texture;
+            uint8_t minAlpha = 0x80;
+        };
+
+        struct Swap
+        {
+            bool valid = false;
+            uint32_t tbp = 0, cbp = 0;
+            Upload texels, clut;
+        };
+
+        struct Bank
+        {
+            std::unordered_map<uint32_t, Upload> uploads;
+            std::unordered_map<uint32_t, Upload> swapped;
+            Swap swaps[kSlots];
+            std::unordered_map<uint64_t, Decoded> decoded;
+        };
+        Bank g_banks[kBanks];
+
+        uint32_t bitsOf(uint32_t psm)
+        {
+            switch (psm)
+            {
+            case packs::PSMCT32: return 32;
+            case packs::PSMCT24: return 24;
+            case packs::PSMCT16: case packs::PSMCT16S: return 16;
+            case packs::PSMT8: return 8;
+            case packs::PSMT4: return 4;
+            default: return 0;
+            }
+        }
+
+        // 0x197050 from 0x1A66D0: one CLUT, mip level or band of rows of a level, in the loading bank.
+        void loadImage(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const uint32_t ra = getRegU32(ctx, 31);
+            if (std::find(std::begin(kFromPlacement), std::end(kFromPlacement), ra) != std::end(kFromPlacement))
+            {
+                const Guest g = guest(rdram, runtime);
+                const int32_t bank = g.s32(getRegU32(ctx, 28) + static_cast<uint32_t>(kLoadingBankGp));
+                const uint32_t dbp = getRegU32(ctx, 5) & 0x3FFFu, psm = getRegU32(ctx, 7) & 0x3Fu;
+                const uint32_t y = getRegU32(ctx, 9) & 0xFFFFu, width = getRegU32(ctx, 10) & 0xFFFFu, height = getRegU32(ctx, 11) & 0xFFFFu;
+                const uint32_t data = g.u32(getRegU32(ctx, 29));
+                const uint32_t bits = bitsOf(psm);
+                if (bank >= 0 && bank < kBanks && bits && width && height && width <= 2048u && y + height <= 2048u)
+                {
+                    Bank &b = g_banks[bank];
+                    const size_t row = size_t(width) * bits / 8u;
+                    Upload &up = b.uploads[dbp];
+                    if (y == 0u || up.psm != psm || up.width != width)
+                        up = Upload{psm, width, 0, {}};
+                    up.height = std::max(up.height, y + height);
+                    up.bytes.resize(row * up.height);
+                    std::memcpy(&up.bytes[row * y], g.at(data), row * height);
+                    up.serial = ++g_serial;
+                }
+            }
+            func_0x197050(rdram, ctx, runtime);
+        }
+
+        int32_t g_preparing[2] = {-1, -1};
+
+        // 0x1A7DA8(bank, slot, name, file): the swap for the bank texture named, built by 0x1A7EA0 below.
+        void prepareSwap(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            g_preparing[0] = getRegS32(ctx, 4);
+            g_preparing[1] = getRegS32(ctx, 5);
+            func_0x1a7da8(rdram, ctx, runtime);
+        }
+
+        // 0x1A7EA0(file, record, packet): the file's CLUT and texels sent over the record's, when its size and format
+        // are the record's.
+        void swapPacket(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const uint32_t file = getRegU32(ctx, 4), rec = getRegU32(ctx, 5);
+            const int32_t bank = g_preparing[0], slot = g_preparing[1];
+            if (bank >= 0 && bank < kBanks && slot >= 0 && slot < static_cast<int32_t>(kSlots))
+            {
+                const Guest g = guest(rdram, runtime);
+                const uint64_t tex0 = g.u64(rec);
+                const uint32_t psm = static_cast<uint32_t>((tex0 >> 20) & 0x3Fu), cpsm = static_cast<uint32_t>((tex0 >> 51) & 0xFu);
+                const uint32_t width = g.u16(rec + 0x24), height = g.u16(rec + 0x26), bits = bitsOf(psm);
+                Swap &swap = g_banks[bank].swaps[slot];
+                swap = Swap{};
+                if (bits && width && height && width <= 2048u && height <= 2048u)
+                {
+                    uint32_t data = file + 16u;
+                    swap.tbp = static_cast<uint32_t>(tex0 & 0x3FFFu);
+                    swap.cbp = static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu);
+                    if (packs::psmIndexed(psm))
+                    {
+                        const bool eight = psm == packs::PSMT8;
+                        swap.clut = Upload{cpsm == 0u ? packs::PSMCT32 : packs::PSMCT16, eight ? 16u : 8u, eight ? 16u : 2u, {}};
+                        const size_t bytes = size_t(swap.clut.width) * swap.clut.height * (cpsm == 0u ? 4u : 2u);
+                        swap.clut.bytes.assign(g.at(data), g.at(data) + bytes);
+                        swap.clut.serial = ++g_serial;
+                        data += static_cast<uint32_t>(bytes);
+                    }
+                    swap.texels = Upload{psm, width, height, {}};
+                    const size_t bytes = size_t(width) * height * bits / 8u;
+                    swap.texels.bytes.assign(g.at(data), g.at(data) + bytes);
+                    swap.texels.serial = ++g_serial;
+                    swap.valid = true;
+                }
+            }
+            func_0x1a7ea0(rdram, ctx, runtime);
+        }
+
+        // 0x1A8048(bank, slot): the swap sent into the frame.
+        void swapIn(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const int32_t bank = getRegS32(ctx, 4), slot = getRegS32(ctx, 5);
+            if (bank >= 0 && bank < kBanks && slot >= 0 && slot < static_cast<int32_t>(kSlots))
+            {
+                Bank &b = g_banks[bank];
+                const Swap &swap = b.swaps[slot];
+                if (swap.valid)
+                {
+                    b.swapped[swap.tbp] = swap.texels;
+                    if (!swap.clut.bytes.empty())
+                        b.swapped[swap.cbp] = swap.clut;
+                }
+            }
+            func_0x1a8048(rdram, ctx, runtime);
+        }
+
+        // 0x1A7350(bank): the bank's pages sent again when another was resident, which undoes its swaps.
+        void makeResident(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const int32_t bank = getRegS32(ctx, 4);
+            const Guest g = guest(rdram, runtime);
+            const int32_t resident = g.s32(getRegU32(ctx, 28) + static_cast<uint32_t>(kResidentBankGp));
+            if (bank > 0 && bank < kBanks && bank != resident)
+                g_banks[bank].swapped.clear();
+            func_0x1a7350(rdram, ctx, runtime);
+        }
+
+        const Upload *upload(const Bank &bank, uint32_t dbp)
+        {
+            if (auto it = bank.swapped.find(dbp); it != bank.swapped.end())
+                return &it->second;
+            if (auto it = bank.uploads.find(dbp); it != bank.uploads.end())
+                return &it->second;
+            return nullptr;
+        }
+
+        bool decode(const Bank &bank, uint64_t tex0, Decoded &out)
+        {
+            const uint32_t tbp = static_cast<uint32_t>(tex0 & 0x3FFFu), psm = static_cast<uint32_t>((tex0 >> 20) & 0x3Fu);
+            const uint32_t tw = 1u << ((tex0 >> 26) & 0xFu), th = 1u << ((tex0 >> 30) & 0xFu);
+            const Upload *texels = upload(bank, tbp);
+            if (!texels || texels->psm != psm || tw > 1024u || th > 1024u)
+                return false;
+            const Upload &up = *texels;
+            const bool indexed = packs::psmIndexed(psm);
+            uint32_t palette[256] = {};
+            uint64_t hash = bozo::hash::xxh64(up.bytes.data(), up.bytes.size(), tex0);
+            if (indexed)
+            {
+                const Upload *clut = upload(bank, static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu));
+                if (!clut)
+                    return false;
+                const Upload &c = *clut;
+                const bool eight = psm == packs::PSMT8;
+                const uint32_t size = c.psm == packs::PSMCT32 ? 4u : 2u, csa = static_cast<uint32_t>((tex0 >> 56) & 0x1Fu);
+                for (uint32_t i = 0; i < (eight ? 256u : 16u); ++i)
+                {
+                    uint32_t at = csa * 16u + i;
+                    if (eight)
+                    {
+                        uint32_t x = 0, y = 0;
+                        bozo::render::csm1Position(i, x, y);
+                        at = y * c.width + x;
+                    }
+                    if ((at + 1u) * size > c.bytes.size())
+                        continue;
+                    uint32_t v = 0;
+                    std::memcpy(&v, &c.bytes[at * size], size);
+                    palette[i] = size == 4u ? v : packs::ct16ToRgba(v, kTexa);
+                }
+                hash = bozo::hash::xxh64(c.bytes.data(), c.bytes.size(), hash);
+            }
+            packs::TextureRecord record;
+            record.psm = psm == packs::PSMCT24 ? packs::PSMCT32 : psm;
+            record.width = up.width;
+            record.height = up.height;
+            const size_t count = size_t(up.width) * up.height;
+            if (psm == packs::PSMT4)
+            {
+                record.texels.resize(count);
+                for (size_t i = 0; i < count; ++i)
+                    record.texels[i] = (up.bytes[i >> 1] >> ((i & 1u) * 4u)) & 0xFu;
+            }
+            else if (psm == packs::PSMCT24)
+            {
+                record.texels.resize(count * 4u);
+                for (size_t i = 0; i < count; ++i)
+                {
+                    std::memcpy(&record.texels[i * 4u], &up.bytes[i * 3u], 3);
+                    record.texels[i * 4u + 3u] = static_cast<uint8_t>(kTexa);
+                }
+            }
+            else
+                record.texels = up.bytes;
+            auto texture = std::make_shared<Texture>();
+            packs::decodeRecord(*texture, tw, th, record.psm, record, palette, kTexa);
+            texture->key = hash | 1u;
+            texture->version = hash;
+            texture->asset = true;
+            uint32_t lowest = 0xFFu;
+            for (uint32_t y = 0; y < std::min(up.height, th); ++y)
+                for (uint32_t x = 0; x < std::min(up.width, tw); ++x)
+                    lowest = std::min(lowest, texture->rgba[size_t(y) * tw + x] >> 24);
+            out.texture = std::move(texture);
+            out.minAlpha = static_cast<uint8_t>(lowest);
+            return true;
+        }
+
+        const Decoded *find(int32_t index, uint64_t tex0)
+        {
+            Bank &bank = g_banks[index];
+            const Upload *texels = upload(bank, static_cast<uint32_t>(tex0 & 0x3FFFu));
+            const Upload *clut = upload(bank, static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu));
+            const uint64_t texelSerial = texels ? texels->serial : 0u, clutSerial = clut ? clut->serial : 0u;
+            const uint64_t key = tex0 & 0x1FFFFFFFFFFFFFFFull;
+            auto it = bank.decoded.find(key);
+            if (it != bank.decoded.end() && it->second.texels == texelSerial && it->second.clut == clutSerial)
+                return it->second.texture ? &it->second : nullptr;
+            Decoded d;
+            d.texels = texelSerial;
+            d.clut = clutSerial;
+            decode(bank, tex0, d);
+            if (bank.decoded.size() > 4096u)
+                bank.decoded.clear();
+            const Decoded &stored = bank.decoded[key] = std::move(d);
+            return stored.texture ? &stored : nullptr;
+        }
+    }
+
+    TexturePtr texture(uint64_t tex0, int32_t bank, uint8_t &minAlpha)
+    {
+        const Decoded *found = nullptr;
+        if (bank > 0 && bank < kBanks)
+            found = find(bank, tex0);
+        for (int32_t i = 0; !found && i < kBanks; ++i)
+            if (i != bank)
+                found = find(i, tex0);
+        if (!found)
+        {
+            return nullptr;
+        }
+        minAlpha = found->minAlpha;
+        return found->texture;
+    }
+
+    void installTextures(bozo::port::Registry &runtime)
+    {
+        runtime.registerFunction(kLoadImage, &loadImage);
+        runtime.registerFunction(kPrepareSwap, &prepareSwap);
+        runtime.registerFunction(kSwapPacket, &swapPacket);
+        runtime.registerFunction(kSwap, &swapIn);
+        runtime.registerFunction(kMakeResident, &makeResident);
+    }
+}

@@ -12,6 +12,7 @@ namespace ffop::frame
 
         void frameWait(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
         {
+            ffop::draw2d::present();
             bozo::port::frameEnd(runtime, ctx);
             func_0x19e718(rdram, ctx, runtime);
         }

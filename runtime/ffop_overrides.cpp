@@ -22,6 +22,11 @@ namespace
     {
         runtime.registerFunction(kCdromModeSet, &cdromModeSet);
         ffop::frame::install(runtime);
+        ffop::graphics::install(runtime);
+        ffop::movies::install(runtime);
+        ffop::draw2d::install(runtime);
+        ffop::draw3d::install(runtime);
+        ffop::vu0::install(runtime);
     }
 }
 

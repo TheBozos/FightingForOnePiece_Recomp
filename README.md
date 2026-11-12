@@ -28,19 +28,23 @@ Not an emulator: the game's own MIPS R5900 code, rebuilt as a native program, wi
 
 ## Status
 
-**Bring-up on BozoEngine.** The first port ran on PS2Recomp up to the fights (the pictures above, and
-[RECOMP_NOTES.md](RECOMP_NOTES.md)). It is moving to BozoEngine, with no emulation: no GS, VIF or VU1 model, only
-native code. On BozoEngine the game boots, brings up its sound modules and the memory card, loads the logo's data and
-stops at its first GS readback. Nothing is drawn yet.
+**Playable route on BozoEngine, window untested.** The first port ran on PS2Recomp (the pictures above, and
+[RECOMP_NOTES.md](RECOMP_NOTES.md)). On BozoEngine there is no emulation: no GS, VIF or VU1 model, only native code.
+The game boots, plays the logo and opening movies, and draws the title, the menus, character select, the VS screen and
+the fights (stage, fighters with their ink outlines, hit effects, HUD) natively, with music, sound effects and voices.
+The headless runs are checked by rendering their draw lists in software. The window build has not been run yet.
 
 | Milestone | |
 |---|:---:|
 | Build on BozoEngine, with a symbol map for the stripped ELF | ✅ |
 | Boot: kernel, CD reads, sound modules (native IRX), memory card, pads | ✅ |
-| Logo load | ✅ |
-| Native drawing (the game's draw lists to the renderer, its readback) | ⏳ |
-| Logos and movies (`MOVIES/*.PSS`) | ⏳ |
-| Title screen, menus, fights | ⏳ |
+| Logos and movies (`MOVIES/*.PSS`): native libmpeg, sound | ✅ |
+| 2D: title, menus, character select, VS screen, HUD | ✅ |
+| VU0 microprograms in C++ | ✅ |
+| 3D: rigid and skinned meshes, outlines (VU1 programs by hand) | ✅ |
+| Music, sound effects, voices | ✅ |
+| The game in a window (`-DFFOP_WINDOW=ON`) | 🔧 |
+| Frame-buffer effects (afterimage, radial blur), the other modes | ⏳ |
 
 ✅ works · 🔧 in progress · ⏳ not reached yet
 
@@ -60,8 +64,15 @@ disc IRX ──► BozoEngine tools/native_irx ───────────
 - `bozo-recomp` turns the game's code into C++. BozoEngine answers the named library functions natively.
 - The disc's sound modules (LIBSD, SDRDRV, MODHSYN, MODMSIN, STRADPCM, SKSOUND, SKHSYNTH, SKMSIN, SKSADPCM) are
   translated at build time and run on BozoEngine's compiled-library host.
-- `runtime/` holds what is specific to the game: the frame boundary at its main loop's frame wait, the CD mode setter,
-  and the sound modules' wiring.
+- `runtime/` holds what is specific to the game:
+  - the frame boundary at the main loop's frame wait (the sync-V callback at the vblank);
+  - the DMA driver, readbacks and display registers answered natively;
+  - the movies on the renderer's backdrop;
+  - the 2D sprite system (textures decoded from EE memory through one GS page's addressing);
+  - the VU0 microprograms in C++;
+  - the 3D draw lists, rigid and skinned meshes with the VU1 programs' arithmetic written by hand, textures from the
+    bank uploads;
+  - the sound modules' wiring.
 
 The engine is the `BozoEngine/` git submodule: [TheBozos/BozoEngine](https://github.com/TheBozos/BozoEngine). Fixes made
 for this port that are not specific to the game go there.
@@ -83,7 +94,10 @@ cmake --build build/bozo --target ffop-headless
 build/bozo/ffop-headless --iso "/path/to/Fighting for One Piece (Japan).iso" --frames 3000 --print
 ```
 
-The run prints what the game logs and why it stopped. `--profile` adds the library calls by name and the device
+For the window, configure with `-DFFOP_WINDOW=ON` and build the `ffop` target. It takes `--iso`, `--pad-script` and
+`--capture-dir` / `--capture-frames`.
+
+The run prints what the game logs and why it stopped. `--wav file` writes the mixer's output, `--profile` adds the library calls by name and the device
 accesses by site; `--pad-script` takes a frame-keyed pad script. The sound modules are read from `MODULES/` next to
 the ELF (`-DFFOP_IRX_DIR` names another folder). `scripts/dis.sh` disassembles the ELF between two addresses, and the
 `scripts/irx*` helpers do the same for the IOP modules.
