@@ -1,7 +1,9 @@
 // FFOP's 3D textures natively: the texels and CLUTs the bank loader's 0x1A66D0 uploads through 0x197050(packet, DBP,
 // DBW, PSM, x, y, width, height, data) kept per bank by their DBP as they are sent (the game frees the file after), and
 // a mesh's TEX0 (patched in at the model's load from the record 0x1A66D0 fills) decoded from the uploads at its TBP and
-// CBP in the bank resident at the draw.
+// CBP in the bank resident at the draw. A fighter's alternate textures (a pained face) are the .tex files 0x1A7DA8 /
+// 0x1A7EA0 prepare over a bank texture's TBP / CBP: 0x1A8048 lays one over the resident bank until 0x1A7350 next sends
+// that bank's pages again.
 #include "ffop_port.h"
 
 #include "ffop_3d.h"
@@ -21,6 +23,12 @@ namespace ffop::draw3d
         namespace packs = bozo::render::packs;
 
         constexpr uint32_t kLoadImage = 0x00197050u;
+        constexpr uint32_t kPrepareSwap = 0x001A7DA8u;
+        constexpr uint32_t kSwapPacket = 0x001A7EA0u;
+        constexpr uint32_t kSwap = 0x001A8048u;
+        constexpr uint32_t kMakeResident = 0x001A7350u;
+        constexpr int32_t kResidentBankGp = -0x16FC;
+        constexpr uint32_t kSlots = 4;
         constexpr uint32_t kFromPlacement[] = {0x001A67ECu, 0x001A6920u, 0x001A6B50u};
         constexpr int32_t kLoadingBankGp = -0x263C;
         constexpr uint64_t kTexa = 0x80u;
@@ -41,9 +49,18 @@ namespace ffop::draw3d
             uint8_t minAlpha = 0x80;
         };
 
+        struct Swap
+        {
+            bool valid = false;
+            uint32_t tbp = 0, cbp = 0;
+            Upload texels, clut;
+        };
+
         struct Bank
         {
             std::unordered_map<uint32_t, Upload> uploads;
+            std::unordered_map<uint32_t, Upload> swapped;
+            Swap swaps[kSlots];
             std::unordered_map<uint64_t, Decoded> decoded;
         };
         Bank g_banks[kBanks];
@@ -89,8 +106,87 @@ namespace ffop::draw3d
             func_0x197050(rdram, ctx, runtime);
         }
 
+        int32_t g_preparing[2] = {-1, -1};
+
+        // 0x1A7DA8(bank, slot, name, file): the swap for the bank texture named, built by 0x1A7EA0 below.
+        void prepareSwap(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            g_preparing[0] = getRegS32(ctx, 4);
+            g_preparing[1] = getRegS32(ctx, 5);
+            func_0x1a7da8(rdram, ctx, runtime);
+        }
+
+        // 0x1A7EA0(file, record, packet): the file's CLUT and texels sent over the record's, when its size and format
+        // are the record's.
+        void swapPacket(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const uint32_t file = getRegU32(ctx, 4), rec = getRegU32(ctx, 5);
+            const int32_t bank = g_preparing[0], slot = g_preparing[1];
+            if (bank >= 0 && bank < kBanks && slot >= 0 && slot < static_cast<int32_t>(kSlots))
+            {
+                const Guest g = guest(rdram, runtime);
+                const uint64_t tex0 = g.u64(rec);
+                const uint32_t psm = static_cast<uint32_t>((tex0 >> 20) & 0x3Fu), cpsm = static_cast<uint32_t>((tex0 >> 51) & 0xFu);
+                const uint32_t width = g.u16(rec + 0x24), height = g.u16(rec + 0x26), bits = bitsOf(psm);
+                Swap &swap = g_banks[bank].swaps[slot];
+                swap = Swap{};
+                if (bits && width && height && width <= 2048u && height <= 2048u)
+                {
+                    uint32_t data = file + 16u;
+                    swap.tbp = static_cast<uint32_t>(tex0 & 0x3FFFu);
+                    swap.cbp = static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu);
+                    if (packs::psmIndexed(psm))
+                    {
+                        const bool eight = psm == packs::PSMT8;
+                        swap.clut = Upload{cpsm == 0u ? packs::PSMCT32 : packs::PSMCT16, eight ? 16u : 8u, eight ? 16u : 2u, {}};
+                        const size_t bytes = size_t(swap.clut.width) * swap.clut.height * (cpsm == 0u ? 4u : 2u);
+                        swap.clut.bytes.assign(g.at(data), g.at(data) + bytes);
+                        swap.clut.serial = ++g_serial;
+                        data += static_cast<uint32_t>(bytes);
+                    }
+                    swap.texels = Upload{psm, width, height, {}};
+                    const size_t bytes = size_t(width) * height * bits / 8u;
+                    swap.texels.bytes.assign(g.at(data), g.at(data) + bytes);
+                    swap.texels.serial = ++g_serial;
+                    swap.valid = true;
+                }
+            }
+            func_0x1a7ea0(rdram, ctx, runtime);
+        }
+
+        // 0x1A8048(bank, slot): the swap sent into the frame.
+        void swapIn(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const int32_t bank = getRegS32(ctx, 4), slot = getRegS32(ctx, 5);
+            if (bank >= 0 && bank < kBanks && slot >= 0 && slot < static_cast<int32_t>(kSlots))
+            {
+                Bank &b = g_banks[bank];
+                const Swap &swap = b.swaps[slot];
+                if (swap.valid)
+                {
+                    b.swapped[swap.tbp] = swap.texels;
+                    if (!swap.clut.bytes.empty())
+                        b.swapped[swap.cbp] = swap.clut;
+                }
+            }
+            func_0x1a8048(rdram, ctx, runtime);
+        }
+
+        // 0x1A7350(bank): the bank's pages sent again when another was resident, which undoes its swaps.
+        void makeResident(uint8_t *rdram, R5900Context *ctx, Runtime *runtime)
+        {
+            const int32_t bank = getRegS32(ctx, 4);
+            const Guest g = guest(rdram, runtime);
+            const int32_t resident = g.s32(getRegU32(ctx, 28) + static_cast<uint32_t>(kResidentBankGp));
+            if (bank > 0 && bank < kBanks && bank != resident)
+                g_banks[bank].swapped.clear();
+            func_0x1a7350(rdram, ctx, runtime);
+        }
+
         const Upload *upload(const Bank &bank, uint32_t dbp)
         {
+            if (auto it = bank.swapped.find(dbp); it != bank.swapped.end())
+                return &it->second;
             if (auto it = bank.uploads.find(dbp); it != bank.uploads.end())
                 return &it->second;
             return nullptr;
@@ -205,5 +301,12 @@ namespace ffop::draw3d
         return found->texture;
     }
 
-    void installTextures(bozo::port::Registry &runtime) { runtime.registerFunction(kLoadImage, &loadImage); }
+    void installTextures(bozo::port::Registry &runtime)
+    {
+        runtime.registerFunction(kLoadImage, &loadImage);
+        runtime.registerFunction(kPrepareSwap, &prepareSwap);
+        runtime.registerFunction(kSwapPacket, &swapPacket);
+        runtime.registerFunction(kSwap, &swapIn);
+        runtime.registerFunction(kMakeResident, &makeResident);
+    }
 }
