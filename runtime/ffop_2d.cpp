@@ -518,6 +518,11 @@ namespace ffop::draw2d
         }
     }
 
+    void queue(const Material &material, std::vector<Vertex> &&vertices, std::shared_ptr<const Texture> texture)
+    {
+        queue(Pending{material, std::move(vertices), std::move(texture)});
+    }
+
     void present()
     {
         bozo::render::Renderer &renderer = bozo::render::Renderer::instance();

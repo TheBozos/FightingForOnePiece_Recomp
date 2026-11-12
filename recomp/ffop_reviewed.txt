@@ -15,3 +15,10 @@ scePadEnd 0x1c2df8
 sceMcEnd 0x1cf020
 sceMcChangeThreadPriority 0x1cf088
 sceCdInitEeCB 0x1d2da8
+# The S-command 0xF whose 8-byte result 0x116A98 reads as BCD seconds, minutes, hours, day, month and year (+2000), as
+# sceCdCLOCK lays them out. Unnamed, it binds the S-command server 0x80000593 through _sceCd_scmd_prechk, which nothing
+# answers, so VS Fight's stage load (st001_pub) spun on the bind forever.
+sceCdReadClock 0x1d4218
+# The game's printf: its arguments spilled for varargs, the formatter 0x1E1910 run with the TTY writer 0x1E2680 between a
+# lock and an unlock; its 329 callers pass printf formats ("chdir_exec : err %d", "sceMcGetInfo returns %d").
+scePrintf 0x1e2810
