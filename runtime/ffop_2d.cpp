@@ -223,8 +223,14 @@ namespace ffop::draw2d
             Material material;
             std::vector<Vertex> vertices;
             TexturePtr texture;
+            uint8_t alphaFail = 0;
         };
         std::vector<Pending> g_pending;
+
+        constexpr Material::AlphaFunc kFailing[8] = {
+            Material::AlphaFunc::Always,   Material::AlphaFunc::Never, Material::AlphaFunc::GreaterEqual, Material::AlphaFunc::Greater,
+            Material::AlphaFunc::NotEqual, Material::AlphaFunc::Less,  Material::AlphaFunc::LessEqual,    Material::AlphaFunc::Equal,
+        };
         bool g_started = false;
 
         bozo::render::Screen screen()
@@ -261,6 +267,9 @@ namespace ffop::draw2d
             m.depthWrite = zte && ztst != 0u;
             if (zte && ztst == 1u)
                 m.depthTest = false;
+            m.alphaTest = test & 1u;
+            m.alphaFunc = static_cast<Material::AlphaFunc>((test >> 1) & 7u);
+            m.alphaRef = static_cast<uint8_t>(test >> 4);
             m.nearest = withTex1 ? ((g.u64(params + 0x48) >> 5) & 1u) == 0u : false;
             m.clampU = m.clampV = true;
             const uint8_t fog = g.at(params + 0x37)[0];
@@ -275,7 +284,9 @@ namespace ffop::draw2d
 
         Pending pending(const Guest &g, uint32_t params, bool textured, bool withTex1, TexturePtr texture)
         {
-            return Pending{material(g, params, textured, withTex1), {}, std::move(texture)};
+            Pending p{material(g, params, textured, withTex1), {}, std::move(texture)};
+            p.alphaFail = static_cast<uint8_t>((g.u64(params + 0x40) >> 12) & 3u);
+            return p;
         }
 
         float fogOf(const Guest &g, uint32_t params)
@@ -327,6 +338,17 @@ namespace ffop::draw2d
             for (const Pending &p : g_pending)
             {
                 draw(p, p.material);
+                if (!p.material.alphaTest || p.alphaFail == 0u)
+                    continue;
+                Material failed = p.material;
+                failed.alphaFunc = kFailing[static_cast<int>(p.material.alphaFunc)];
+                if (p.alphaFail == 2u)
+                    failed.colourMask = 0;
+                else
+                    failed.depthWrite = false;
+                if (p.alphaFail == 3u)
+                    failed.colourMask &= 0x7u;
+                draw(p, failed);
             }
             g_pending.clear();
         }
