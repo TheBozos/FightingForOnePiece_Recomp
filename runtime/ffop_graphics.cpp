@@ -48,7 +48,7 @@ namespace ffop::graphics
         bool instruction(uint8_t *, R5900Context *ctx, Runtime *rt, uint32_t pc)
         {
             if (!std::binary_search(kSorted.begin(), kSorted.end(), pc))
-                return ffop::movies::instruction(ctx, rt, pc);
+                return ffop::movies::instruction(ctx, rt, pc) || ffop::frame::instruction(ctx, rt, pc);
             if (pc == kSyncVCsrRead)
                 setRegU64(ctx, 3, (bozo::port::vblankCount(rt) & 1u) << 13);
             return true;

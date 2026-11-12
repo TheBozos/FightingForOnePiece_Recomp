@@ -5,6 +5,8 @@
 
 namespace ffop::frame
 {
+    // The load meter's T3 reads answered natively (true when `pc` is one).
+    bool instruction(R5900Context *ctx, Runtime *runtime, uint32_t pc);
     void install(bozo::port::Registry &runtime);
 }
 
