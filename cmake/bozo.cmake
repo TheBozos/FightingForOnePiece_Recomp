@@ -4,8 +4,9 @@
 #   cmake -S . -B build/bozo -G Ninja -DFFOP_ELF=<SLPS_255.45> [-DBOZO_ENGINE_DIR=<BozoEngine>]
 #         [-DFFOP_SYMBOL_MAP=<ffop_symbols.txt>]
 #
-# Targets: ffop-headless (no window, BozoEngine's free host).
+# Targets: ffop-headless (no window, BozoEngine's free host); with -DFFOP_WINDOW=ON, ffop (the game in a window).
 
+option(FFOP_WINDOW "Build ffop, the game in a window (BozoEngine's bozo_app: SDL3, OpenGL 3.3)" OFF)
 set(BOZO_ENGINE_DIR "" CACHE PATH "BozoEngine's source tree (default: the BozoEngine submodule)")
 if(NOT BOZO_ENGINE_DIR AND EXISTS "${CMAKE_SOURCE_DIR}/BozoEngine/CMakeLists.txt")
     set(BOZO_ENGINE_DIR "${CMAKE_SOURCE_DIR}/BozoEngine" CACHE PATH "BozoEngine's source tree (default: the BozoEngine submodule)" FORCE)
@@ -41,7 +42,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(BOZO_TMB_ELF "" CACHE FILEPATH "" FORCE)
-set(BOZO_APP OFF CACHE BOOL "" FORCE)
+set(BOZO_APP ${FFOP_WINDOW} CACHE BOOL "" FORCE)
 add_subdirectory("${BOZO_ENGINE_DIR}" bozo)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -133,3 +134,9 @@ add_executable(ffop-headless bozo/ffop_headless.cpp)
 target_link_libraries(ffop-headless PRIVATE ffop_runtime ffop_generated ffop_iop bozo_host)
 target_compile_definitions(ffop-headless PRIVATE BOZO_RUN_DEFAULT_ELF="${FFOP_ELF}"
     FFOP_DEFAULT_SYMBOL_MAP="${FFOP_SYMBOL_MAP}")
+
+if(FFOP_WINDOW)
+    add_executable(ffop bozo/ffop_window.cpp)
+    target_link_libraries(ffop PRIVATE ffop_runtime ffop_generated ffop_iop bozo_host bozo_app)
+    target_compile_definitions(ffop PRIVATE BOZO_RUN_DEFAULT_ELF="${FFOP_ELF}" FFOP_DEFAULT_SYMBOL_MAP="${FFOP_SYMBOL_MAP}")
+endif()
