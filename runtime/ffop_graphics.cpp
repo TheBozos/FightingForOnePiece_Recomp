@@ -25,7 +25,7 @@ namespace ffop::graphics
         };
 
         // bozo:native kHardwareOutput
-        constexpr uint32_t kHardwareOutput[] = {0x0019E60Cu};
+        constexpr uint32_t kHardwareOutput[] = {0x0019E60Cu, 0x001B7DB0u, 0x001B7DB4u};
 
         constexpr auto kSorted = [] {
             auto sites = std::to_array(kHardwareOutput);
