@@ -30,11 +30,13 @@ namespace ffop::draw3d
         {
             uint32_t psm = 0, width = 0, height = 0;
             std::vector<uint8_t> bytes;
+            uint64_t serial = 0;
         };
+        uint64_t g_serial = 0;
 
         struct Decoded
         {
-            uint64_t generation = 0;
+            uint64_t texels = 0, clut = 0;
             TexturePtr texture;
             uint8_t minAlpha = 0x80;
         };
@@ -43,7 +45,6 @@ namespace ffop::draw3d
         {
             std::unordered_map<uint32_t, Upload> uploads;
             std::unordered_map<uint64_t, Decoded> decoded;
-            uint64_t generation = 1;
         };
         Bank g_banks[kBanks];
 
@@ -82,29 +83,36 @@ namespace ffop::draw3d
                     up.height = std::max(up.height, y + height);
                     up.bytes.resize(row * up.height);
                     std::memcpy(&up.bytes[row * y], g.at(data), row * height);
-                    ++b.generation;
+                    up.serial = ++g_serial;
                 }
             }
             func_0x197050(rdram, ctx, runtime);
+        }
+
+        const Upload *upload(const Bank &bank, uint32_t dbp)
+        {
+            if (auto it = bank.uploads.find(dbp); it != bank.uploads.end())
+                return &it->second;
+            return nullptr;
         }
 
         bool decode(const Bank &bank, uint64_t tex0, Decoded &out)
         {
             const uint32_t tbp = static_cast<uint32_t>(tex0 & 0x3FFFu), psm = static_cast<uint32_t>((tex0 >> 20) & 0x3Fu);
             const uint32_t tw = 1u << ((tex0 >> 26) & 0xFu), th = 1u << ((tex0 >> 30) & 0xFu);
-            const auto texels = bank.uploads.find(tbp);
-            if (texels == bank.uploads.end() || texels->second.psm != psm || tw > 1024u || th > 1024u)
+            const Upload *texels = upload(bank, tbp);
+            if (!texels || texels->psm != psm || tw > 1024u || th > 1024u)
                 return false;
-            const Upload &up = texels->second;
+            const Upload &up = *texels;
             const bool indexed = packs::psmIndexed(psm);
             uint32_t palette[256] = {};
             uint64_t hash = bozo::hash::xxh64(up.bytes.data(), up.bytes.size(), tex0);
             if (indexed)
             {
-                const auto clut = bank.uploads.find(static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu));
-                if (clut == bank.uploads.end())
+                const Upload *clut = upload(bank, static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu));
+                if (!clut)
                     return false;
-                const Upload &c = clut->second;
+                const Upload &c = *clut;
                 const bool eight = psm == packs::PSMT8;
                 const uint32_t size = c.psm == packs::PSMCT32 ? 4u : 2u, csa = static_cast<uint32_t>((tex0 >> 56) & 0x1Fu);
                 for (uint32_t i = 0; i < (eight ? 256u : 16u); ++i)
@@ -163,12 +171,16 @@ namespace ffop::draw3d
         const Decoded *find(int32_t index, uint64_t tex0)
         {
             Bank &bank = g_banks[index];
+            const Upload *texels = upload(bank, static_cast<uint32_t>(tex0 & 0x3FFFu));
+            const Upload *clut = upload(bank, static_cast<uint32_t>((tex0 >> 37) & 0x3FFFu));
+            const uint64_t texelSerial = texels ? texels->serial : 0u, clutSerial = clut ? clut->serial : 0u;
             const uint64_t key = tex0 & 0x1FFFFFFFFFFFFFFFull;
             auto it = bank.decoded.find(key);
-            if (it != bank.decoded.end() && it->second.generation == bank.generation)
+            if (it != bank.decoded.end() && it->second.texels == texelSerial && it->second.clut == clutSerial)
                 return it->second.texture ? &it->second : nullptr;
             Decoded d;
-            d.generation = bank.generation;
+            d.texels = texelSerial;
+            d.clut = clutSerial;
             decode(bank, tex0, d);
             if (bank.decoded.size() > 4096u)
                 bank.decoded.clear();
