@@ -175,6 +175,7 @@ int main(int argc, char **argv)
         std::fprintf(stderr, "ffop: %s\n", error.c_str());
         return 2;
     }
+    host.libraries().cd.hostClock = true;
     bozo::app::DevicePad pad;
     bool scripted = !opt.padScript.empty();
     for (const std::string &script : opt.playerScripts)
